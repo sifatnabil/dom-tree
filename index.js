@@ -1,10 +1,16 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 
-const url =
-  "https://web.ics.purdue.edu/~gchopra/class/public/pages/webdesign/05_simple.html";
+// const url =
+//   "https://web.ics.purdue.edu/~gchopra/class/public/pages/webdesign/05_simple.html";
 
 // const url = "https://pubmed.ncbi.nlm.nih.gov/28683860/";
+
+// const url =
+//   "https://www.pubfacts.com/detail/33844180/Quality-of-primary-care-and-quality-of-life-from-the-point-of-view-of-older-patients-with-dizziness-";
+
+const url =
+  "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-018-2853-7";
 const treeAr = [];
 
 const getLinearAr = (node) => {
@@ -66,7 +72,11 @@ const getTree = async () => {
         let content = node.outerText || "";
         if (content) {
           const contentWords = content.split(" ");
-          score = contentWords.length;
+          for (const word of contentWords) {
+            if (word) {
+              score++;
+            }
+          }
         }
 
         return {
@@ -104,13 +114,15 @@ const getTree = async () => {
 
   console.log(treeAr);
 
-  treeAr.sort((a, b) => {
-    return a.children - b.children;
-  });
+  fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
 
-  console.log("Sorting based on no of children Ascending");
+  // treeAr.sort((a, b) => {
+  //   return a.children - b.children;
+  // });
 
-  console.log(treeAr);
+  // console.log("Sorting based on no of children Ascending");
+
+  // console.log(treeAr);
 
   await browser.close();
 };
