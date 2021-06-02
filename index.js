@@ -1,5 +1,6 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
+const { getPriority } = require("os");
 
 // const url =
 //   "https://web.ics.purdue.edu/~gchopra/class/public/pages/webdesign/05_simple.html";
@@ -11,7 +12,28 @@ const fs = require("fs");
 
 const url =
   "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-018-2853-7";
-const treeAr = [];
+let treeAr = [];
+const mainArticleList = [];
+
+const threshold = 300;
+const siteList = [
+  "https://pubmed.ncbi.nlm.nih.gov/24204642",
+  "https://pubmed.ncbi.nlm.nih.gov/25907703",
+  "https://pubmed.ncbi.nlm.nih.gov/27590181",
+  "https://pubmed.ncbi.nlm.nih.gov/28143799",
+  "https://pubmed.ncbi.nlm.nih.gov/29769577",
+  "https://pubmed.ncbi.nlm.nih.gov/31930323",
+  "https://pubmed.ncbi.nlm.nih.gov/31930323",
+  "https://pubmed.ncbi.nlm.nih.gov/32378801",
+  "https://pubmed.ncbi.nlm.nih.gov/32512530",
+  "https://pubmed.ncbi.nlm.nih.gov/32853038",
+  "https://pubmed.ncbi.nlm.nih.gov/32868092",
+  "https://pubmed.ncbi.nlm.nih.gov/32924089",
+  "https://pubmed.ncbi.nlm.nih.gov/33085084",
+  "https://pubmed.ncbi.nlm.nih.gov/33130203",
+  "https://pubmed.ncbi.nlm.nih.gov/33139015",
+  "https://pubmed.ncbi.nlm.nih.gov/33537331",
+];
 
 const getLinearAr = (node) => {
   if (node.children.length > 0) {
@@ -27,6 +49,9 @@ const getLinearAr = (node) => {
     content: node.content,
     nodeVal: node.nodeVal,
     nodeScore: node.nodeScore,
+    nodeFont: node.nodeFont,
+    nodeFontSize: node.nodeFontSize,
+    nodeStyle: node.nodeStyle,
   });
 };
 
@@ -55,6 +80,7 @@ const getTree = async () => {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
 
+  treeAr = [];
   await page.goto(url, { waitUntil: "networkidle0" });
 
   const tree = await page.evaluate(async () => {
@@ -73,7 +99,7 @@ const getTree = async () => {
         if (content) {
           const contentWords = content.split(" ");
           for (const word of contentWords) {
-            if (word) {
+            if (word.trim()) {
               score++;
             }
           }
@@ -83,9 +109,12 @@ const getTree = async () => {
           nodeName: node.nodeName,
           parentName: node.parentNode.nodeName,
           children: children,
-          content: node.outerText || "",
+          content: node.innerText || "",
           nodeVal: nodeValue,
           nodeScore: score,
+          nodeFont: node.style.fontFamily,
+          nodeFontSize: node.style.fontSize,
+          nodeStyle: node.style,
         };
       }
 
@@ -99,32 +128,43 @@ const getTree = async () => {
   });
 
   // console.log(tree);
+  fs.writeFile("test.txt", JSON.stringify(tree), () => {});
 
   // const optimedNodeContent = optimizedValue(tree, true);
   // console.log(optimedNodeContent);
 
-  getLinearAr(tree);
-  // console.log(treeAr);
-
-  treeAr.sort((a, b) => {
-    return b.nodeScore - a.nodeScore;
-  });
-
-  console.log("Sorting based on node score Descending");
-
-  console.log(treeAr);
-
-  fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
+  // getLinearAr(tree);
+  // // console.log(treeAr);
 
   // treeAr.sort((a, b) => {
-  //   return a.children - b.children;
+  //   return b.nodeScore - a.nodeScore;
   // });
 
-  // console.log("Sorting based on no of children Ascending");
+  // // console.log(treeAr);
 
-  // console.log(treeAr);
+  // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
+
+  // const treeArlen = treeAr.length;
+  let mainContent = {};
+
+  for (let i = 1; i < treeArlen; i++) {
+    const contentDiff = treeAr[i - 1].nodeScore - treeAr[i].nodeScore;
+    if (contentDiff >= threshold) {
+      mainContent = treeAr[i - 1];
+      break;
+    }
+  }
+
+  // // console.log(mainContent);
+
+  // mainArticleList.push({ ...mainContent, Link: url });
+  // console.log(mainArticleList);
+
+  // fs.writeFile("outputs.txt", JSON.stringify(mainArticleList), () => {});
 
   await browser.close();
 };
 
 getTree();
+
+// getTree(url);
