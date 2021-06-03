@@ -5,13 +5,14 @@ const { getPriority } = require("os");
 // const url =
 //   "https://web.ics.purdue.edu/~gchopra/class/public/pages/webdesign/05_simple.html";
 
-// const url = "https://pubmed.ncbi.nlm.nih.gov/28683860/";
-
-// const url =
-//   "https://www.pubfacts.com/detail/33844180/Quality-of-primary-care-and-quality-of-life-from-the-point-of-view-of-older-patients-with-dizziness-";
+ //const url = "https://pubmed.ncbi.nlm.nih.gov/28683860/";
 
 const url =
-  "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-018-2853-7";
+  "https://www.pubfacts.com/detail/33844180/Quality-of-primary-care-and-quality-of-life-from-the-point-of-view-of-older-patients-with-dizziness-";
+
+// const url =
+//   "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-018-2853-7";
+
 let treeAr = [];
 const mainArticleList = [];
 
@@ -77,7 +78,7 @@ const optimizedValue = (node, isMax) => {
 };
 
 const getTree = async () => {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
 
   treeAr = [];
@@ -85,6 +86,9 @@ const getTree = async () => {
 
   const tree = await page.evaluate(async () => {
     let nodeValue = 0;
+    let maxFontSize = 0;
+    let textFromMaxFornt = '';
+    let hTags = [];
     const getNodeTree = (node) => {
       if (node.hasChildNodes()) {
         let children = [];
@@ -92,7 +96,11 @@ const getTree = async () => {
           const child = getNodeTree(node.childNodes[j]);
           if (child) children.push(child);
         }
-
+        //console.log(getComputedStyle(node).fontSize);
+        if(parseFloat(getComputedStyle(node).fontSize) > maxFontSize){
+          maxFontSize = parseFloat(getComputedStyle(node).fontSize);
+          textFromMaxFornt = node.outerText;
+        }
         nodeValue++;
         let score = 0;
         let content = node.outerText || "";
@@ -104,7 +112,10 @@ const getTree = async () => {
             }
           }
         }
-
+        let tagCheck = node.nodeName;
+        if(tagCheck == 'H1' || tagCheck == 'H2' || tagCheck == 'H3'){
+          hTags.push({tag:tagCheck, text : node.outerText})
+        }
         return {
           nodeName: node.nodeName,
           parentName: node.parentNode.nodeName,
@@ -112,9 +123,7 @@ const getTree = async () => {
           content: node.innerText || "",
           nodeVal: nodeValue,
           nodeScore: score,
-          nodeFont: node.style.fontFamily,
-          nodeFontSize: node.style.fontSize,
-          nodeStyle: node.style,
+          nodeFontSize: getComputedStyle(node).fontSize,
         };
       }
 
@@ -124,7 +133,9 @@ const getTree = async () => {
 
     const nodeTree = await getNodeTree(bodyText);
 
-    return nodeTree;
+    //return nodeTree;
+    return hTags;
+    //return textFromMaxFornt;
   });
 
   // console.log(tree);
@@ -145,15 +156,15 @@ const getTree = async () => {
   // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
 
   // const treeArlen = treeAr.length;
-  let mainContent = {};
+  // let mainContent = {};
 
-  for (let i = 1; i < treeArlen; i++) {
-    const contentDiff = treeAr[i - 1].nodeScore - treeAr[i].nodeScore;
-    if (contentDiff >= threshold) {
-      mainContent = treeAr[i - 1];
-      break;
-    }
-  }
+  // for (let i = 1; i < treeArlen; i++) {
+  //   const contentDiff = treeAr[i - 1].nodeScore - treeAr[i].nodeScore;
+  //   if (contentDiff >= threshold) {
+  //     mainContent = treeAr[i - 1];
+  //     break;
+  //   }
+  // }
 
   // // console.log(mainContent);
 
