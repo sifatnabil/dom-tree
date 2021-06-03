@@ -1,6 +1,6 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
-const { getPriority } = require("os");
+const { spawn } = require("child_process");
 
 // const url =
 //   "https://web.ics.purdue.edu/~gchopra/class/public/pages/webdesign/05_simple.html";
@@ -130,37 +130,46 @@ const getTree = async () => {
   // console.log(tree);
   fs.writeFile("test.txt", JSON.stringify(tree), () => {});
 
-  // const optimedNodeContent = optimizedValue(tree, true);
-  // console.log(optimedNodeContent);
-
-  // getLinearAr(tree);
+  getLinearAr(tree);
   // // console.log(treeAr);
 
-  // treeAr.sort((a, b) => {
-  //   return b.nodeScore - a.nodeScore;
-  // });
+  treeAr.sort((a, b) => {
+    return b.nodeScore - a.nodeScore;
+  });
 
   // // console.log(treeAr);
-
   // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
 
-  // const treeArlen = treeAr.length;
-  let mainContent = {};
+  const treeArlen = treeAr.length;
 
-  for (let i = 1; i < treeArlen; i++) {
-    const contentDiff = treeAr[i - 1].nodeScore - treeAr[i].nodeScore;
-    if (contentDiff >= threshold) {
-      mainContent = treeAr[i - 1];
-      break;
-    }
+  const contentDiffAr = [];
+
+  for (let i = 0; i < treeArlen - 1; i++) {
+    const contentDiff = treeAr[i].nodeScore - treeAr[i + 1].nodeScore;
+    contentDiffAr.push(contentDiff);
   }
 
-  // // console.log(mainContent);
+  const maxContentDiffIndex = contentDiffAr.reduce(
+    (bestIndexSoFar, currentlyTestedValue, currentlyTestedIndex, array) =>
+      currentlyTestedValue > array[bestIndexSoFar]
+        ? currentlyTestedIndex
+        : bestIndexSoFar,
+    0
+  );
 
-  // mainArticleList.push({ ...mainContent, Link: url });
-  // console.log(mainArticleList);
+  const filename = "input-file.txt";
 
-  // fs.writeFile("outputs.txt", JSON.stringify(mainArticleList), () => {});
+  // console.log(contentDiffAr);
+  const mainContent = treeAr[maxContentDiffIndex];
+  fs.writeFile(filename, mainContent.content, () => {});
+
+  // example1 = "My name is Wolfgang and I live in Berlin";
+
+  const childPython = spawn("python", ["script.py", filename]);
+
+  childPython.stdout.on("data", (data) => {
+    console.log(`${data}`);
+  });
 
   await browser.close();
 };
