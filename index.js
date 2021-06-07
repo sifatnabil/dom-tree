@@ -12,10 +12,9 @@ const { spawn } = require("child_process");
 
 const url =
   "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-018-2853-7";
+
 let treeAr = [];
 const mainArticleList = [];
-
-const threshold = 300;
 const siteList = [
   "https://pubmed.ncbi.nlm.nih.gov/24204642",
   "https://pubmed.ncbi.nlm.nih.gov/25907703",
@@ -45,7 +44,8 @@ const getLinearAr = (node) => {
   treeAr.push({
     nodeName: node.nodeName,
     parentName: node.parentName,
-    children: node.children.length,
+    children: node.children,
+    childrenCount: node.children.length,
     content: node.content,
     nodeVal: node.nodeVal,
     nodeScore: node.nodeScore,
@@ -82,6 +82,16 @@ const getTree = async () => {
 
   treeAr = [];
   await page.goto(url, { waitUntil: "networkidle0" });
+
+  // Look for expandable sections and click them.
+  await page.evaluate(() => {
+    const aTags = document.querySelectorAll("a");
+    aTags.forEach((tag) => {
+      if (tag.outerText == "[…]") {
+        tag.click();
+      }
+    });
+  });
 
   const tree = await page.evaluate(async () => {
     let nodeValue = 0;
@@ -157,13 +167,19 @@ const getTree = async () => {
     0
   );
 
-  const filename = "input-file.txt";
+  const filename = "input-file2.txt";
 
   // console.log(contentDiffAr);
   const mainContent = treeAr[maxContentDiffIndex];
-  fs.writeFile(filename, mainContent.content, () => {});
+  // console.log(mainContent.children);
+  const subSectionCnt = Math.floor(mainContent.childrenCount / 3);
+  let subSection = "";
+  for (let i = 0; i < subSectionCnt; i++) {
+    subSection += mainContent.children[i].content + " ";
+  }
+  fs.writeFile(filename, subSection, () => {});
 
-  // example1 = "My name is Wolfgang and I live in Berlin";
+  example1 = "My name is Wolfgang and I live in Berlin";
 
   const childPython = spawn("python", ["script.py", filename]);
 
