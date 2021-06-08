@@ -1,46 +1,42 @@
-import torch
 import sys
 from flair.data import Sentence
 from flair.models import SequenceTagger
+sys.stdout.reconfigure(encoding='utf-8')
 
-
-# filename = sys.argv[1];
-filename = "input-file2.txt"
-
-with open(filename, 'r', encoding='utf-8') as f:
-    text = f.read()
 
 def process_text(text):
     lines = text.split("\n")
-    clean_text = " ".join(str(x.replace(u'\xa0', u' ')) for x in lines)
+    clean_text = " ".join(str(x.replace(u'\xa0', u' ')) for x in lines if x)
     return clean_text
 
-example2 = process_text(text)
+def inference(text):
+    tagger = SequenceTagger.load('flair/ner-english-fast')
 
-# tagger = SequenceTagger.load("flair/ner-english-large")
+    sentence = Sentence(text)
+    tagger.predict(sentence)
 
-tagger = SequenceTagger.load('flair/ner-english-fast')
-
-example1 = "My name is Wolfgang and I live in Berlin"
-
-sentence = Sentence(example2)
-tagger.predict(sentence)
-
-persons = []
+    persons = []
 
 # print(sentence.get_spans('ner'))
 
-predicted_output = sentence.to_dict(tag_type='ner')
-entities = predicted_output["entities"]
-for ent in entities: 
-    for label in ent["labels"]:
-        if "PER" in str(label):
-            persons.append(ent['text'])
-            # print(f"Name: {ent['text']}")
-            break
+    predicted_output = sentence.to_dict(tag_type='ner')
+    entities = predicted_output["entities"]
+    for ent in entities: 
+        for label in ent["labels"]:
+            if "PER" in str(label):
+                persons.append(ent['text'])
+                # print(f"Name: {ent['text']}")
+                break
 
 
-# for entity in sentence.get_spans('ner'):
-#     print(entity)
+    # for entity in sentence.get_spans('ner'):
+    #     print(entity)
 
-print(persons)
+    print(persons)
+
+if __name__ == '__main__':
+    filename = sys.argv[1]
+    with open(filename, 'r', encoding='utf-8') as f:
+        text = f.read()
+    processed_text = process_text(text)
+    inference(processed_text)
