@@ -2,15 +2,35 @@ const spawn = require("child_process").spawn;
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { PythonShell } = require("python-shell");
+const {
+  checkStarterWords,
+  clearNames,
+  isArticle,
+  generateQueryString,
+} = require("./utils");
 
 // const { getLinearAr } = require("./content");
 
-const url =
-  "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-020-04543-4";
+// const url =
+//   "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-020-04543-4";
 
-// * Helper Functions
+// const siteList = {
+//   pubmed: "https://pubmed.ncbi.nlm.nih.gov",
+//   trialsjournal: "https://trialsjournal.biomedcentral.com",
+// };
+
+const siteList = [
+  { name: "PubMed", url: "https://pubmed.ncbi.nlm.nih.gov" },
+  { name: "TrialsJournal", url: "https://trialsjournal.biomedcentral.com" },
+];
+
+const authors = ["karen voigt"];
+
+const url = "https://pubmed.ncbi.nlm.nih.gov/31070414/";
+
 let treeAr = [];
 
+// * Construct a linear array from a tree.
 const getLinearAr = (node) => {
   if (node.children.length > 0) {
     for (let j = 0; j < node.children.length; j++) {
@@ -32,213 +52,226 @@ const getLinearAr = (node) => {
   });
 };
 
-const checkStarterWords = (content) => {
-  const starterWords = ["abstract", "background", "conclusion", "methods"];
-
-  for (const word of starterWords) {
-    if (content.toLowerCase().startsWith(word)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const clearNames = (names) => {
-  startIndex = names.indexOf("[");
-  endIndex = names.indexOf("]");
-  const nameSection = names.slice(startIndex + 1, endIndex);
-  if (nameSection.length > 1) {
-    const filteredListSplit = nameSection.split(",");
-    const authorNames = [];
-    for (const name of filteredListSplit) {
-      const nameFiltered = name.replace(/'/g, "");
-      authorNames.push(nameFiltered.trim());
-    }
-    return authorNames;
-  }
-  return "";
-};
-
-// * listing
-
-text = `Abstract
-The Thai Karen, the largest hill-tribe in Thailand, guard substantial ethnomedicinal plant knowledge, as documented in several studies that targeted single villages. Here, we have compiled information from all the reliable and published sources to present a comprehensive overview of the Karen ethnomedicinal plant knowledge. Our dataset covers 31 Karen villages distributed over eight provinces in Thailand. We used the Cultural Importance Index (CI) to determine which species were the most valuable to the Karen and the Informant Consensus Factor (ICF) to evaluate how well distributed the knowledge of ethnomedicinal plants was in various medicinal use categories. In the 31 Karen villages, we found 3188 reports of ethnomedicinal plant uses of 732 species in 150 plant families. Chromolaena odorata, Biancaea sappan, and Tinospora crispa were the most important medicinal plants, with the highest CI values. The Leguminosae, Asteraceae, Zingiberaceae, Euphorbiaceae, Lamiaceae, Acanthaceae, Apocynaceae, and Menispermaceae were the families with the highest CI values in the mentioned order. A high proportion of all the 3188 Karen use reports were used to treat digestive, general and unspecified, musculoskeletal, and skin disorders.`;
-
 const getTree = async () => {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    headless: false,
+    defaultViewport: null,
+    ignoreHTTPSErrors: true,
+  });
   const page = await browser.newPage();
 
-  treeAr = [];
-  await page.goto(url, { waitUntil: "networkidle0" });
+  await page.exposeFunction("isArticle", isArticle);
 
-  // Look for expandable sections and click them.
-  await page.evaluate(() => {
-    const aTags = document.querySelectorAll("a");
-    aTags.forEach((tag) => {
-      if (tag.outerText == "[…]") {
-        tag.click();
-      }
-    });
-  });
+  // * filter out the links
+  const allLinks = [];
+  for (const site of siteList) {
+    const sitename = site.name;
+    const url = site.url;
 
-  // * article classification
-  // const isArticle = async (text) => {
-  //   const pythonProcess = spawn("python", ["./classifier.py", text]);
-  //   const articleCheck = new Promise((resolve, reject) => {
-  //     pythonProcess.stdout.on("data", (data) => {
-  //       resolve(data.toString());
-  //     });
-  //   });
+    const queryString = generateQueryString("karen", "voigt", sitename);
 
-  //   const percentage = await articleCheck;
-  //   if (parseFloat(percentage) > 0.9) {
-  //     console.log("true");
-  //   } else {
-  //     console.log("false");
-  //   }
-  // };
+    await page.goto(queryString, { waitUntil: "networkidle0" });
+    await page.waitForTimeout(5000);
 
-  const tree = await page.evaluate(async () => {
-    let nodeValue = 0;
+    const aTags = await page.evaluate(
+      (name, home) => {
+        const tags = document.querySelectorAll("body a");
+        const links = [];
+        const linksWithText = [];
+        tags.forEach((tag) => {
+          const text = tag.outerText.trim();
+          const link = tag.href;
 
-    const isArticle = async (text) => {
-      const pythonProcess = spawn("python", ["./classifier.py", text]);
-      const articleCheck = new Promise((resolve, reject) => {
-        pythonProcess.stdout.on("data", (data) => {
-          resolve(data.toString());
+          if (
+            text.split(" ").length >= 4 &&
+            link.includes(home) &&
+            !links.includes(link)
+          ) {
+            linksWithText.push({
+              Link: link,
+              Text: text,
+              Site: name,
+            });
+            links.push(link);
+          }
         });
+        return linksWithText;
+      },
+      sitename,
+      url
+    );
+
+    allLinks.push(...aTags);
+  }
+
+  fs.writeFileSync("links", JSON.stringify(allLinks));
+
+  console.log("Link grabbing complete");
+
+  const links = JSON.parse(fs.readFileSync("links", "utf8"));
+
+  for (const url of links) {
+    treeAr = [];
+    await page.goto(url.Link, { waitUntil: "networkidle0" });
+
+    const tree = await page.evaluate(async () => {
+      // * Look for expandable sections and click them.
+      const aTags = document.querySelectorAll("a");
+      aTags.forEach((tag) => {
+        if (tag.outerText == "[…]") {
+          tag.click();
+        }
       });
 
-      const percentage = await articleCheck;
-      if (parseFloat(percentage) > 0.9) {
-        return true;
-      }
-      return false;
-    };
+      let nodeValue = 0;
 
-    const getNodeTree = (node) => {
-      if (node.hasChildNodes()) {
-        let children = [];
-        for (let j = 0; j < node.childNodes.length; j++) {
-          const child = getNodeTree(node.childNodes[j]);
-          if (child) children.push(child);
-        }
+      const getNodeTree = (node) => {
+        if (node.hasChildNodes()) {
+          let children = [];
+          for (let j = 0; j < node.childNodes.length; j++) {
+            const child = getNodeTree(node.childNodes[j]);
+            if (child) children.push(child);
+          }
 
-        nodeValue++;
-        let score = 0;
-        let content = node.outerText || "";
-        if (content) {
-          const contentWords = content.split(" ");
-          for (const word of contentWords) {
-            if (word.trim()) {
-              score++;
+          nodeValue++;
+          let score = 0;
+          let content = node.outerText || "";
+          if (content) {
+            const contentWords = content.split(" ");
+            for (const word of contentWords) {
+              if (word.trim()) {
+                score++;
+              }
             }
           }
+
+          return {
+            nodeName: node.nodeName,
+            parentName: node.parentNode.nodeName,
+            children: children,
+            content: node.innerText || "",
+            nodeVal: nodeValue,
+            nodeScore: score,
+            nodeFont: node.style.fontFamily,
+            nodeFontSize: node.style.fontSize,
+            nodeStyle: node.style,
+          };
         }
 
-        return {
-          nodeName: node.nodeName,
-          parentName: node.parentNode.nodeName,
-          children: children,
-          content: node.innerText || "",
-          nodeVal: nodeValue,
-          nodeScore: score,
-          nodeFont: node.style.fontFamily,
-          nodeFontSize: node.style.fontSize,
-          nodeStyle: node.style,
-        };
+        return false;
+      };
+      const nodes = document.querySelector("body");
+      const bodyText = document.querySelector("body").outerText;
+
+      const article = await isArticle(bodyText);
+      console.log(article);
+
+      if (article) {
+        return await getNodeTree(nodes);
       }
 
-      return false;
-    };
-    const bodyText = document.querySelector("body");
+      return "";
+    });
 
-    const article = isArticle(bodyText);
+    if (tree !== "") {
+      getLinearAr(tree);
+      // console.log(treeAr);
 
-    console.log(article);
+      treeAr.sort((a, b) => {
+        return b.nodeScore - a.nodeScore;
+      });
 
-    if (article) {
-      return await getNodeTree(bodyText);
+      // console.log(treeAr);
+      // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
+
+      const treeArlen = treeAr.length;
+
+      const contentDiffAr = [];
+
+      for (let i = 0; i < treeArlen - 1; i++) {
+        const contentDiff = treeAr[i].nodeScore - treeAr[i + 1].nodeScore;
+        contentDiffAr.push(contentDiff);
+      }
+
+      const maxContentDiffIndex = contentDiffAr.reduce(
+        (bestIndexSoFar, currentlyTestedValue, currentlyTestedIndex, array) =>
+          currentlyTestedValue > array[bestIndexSoFar]
+            ? currentlyTestedIndex
+            : bestIndexSoFar,
+        0
+      );
+
+      // * Take one third of the mainContent and write it in a file for inference.
+      const filename = "input-file2.txt";
+      const mainContent = treeAr[maxContentDiffIndex];
+      const subSectionCnt = 2; // Math.floor(mainContent.childrenCount / 3);
+      let subSection = "";
+      for (let i = 0; i < subSectionCnt; i++) {
+        subSection += mainContent.children[i].content + " ";
+      }
+      fs.writeFile(filename, subSection, () => {});
+
+      // * Call the python script and get the results back.
+      const options = {
+        mode: "text",
+        args: [filename],
+      };
+
+      const getNames = async () => {
+        const names = new Promise((resolve, reject) => {
+          PythonShell.run("script.py", options, (err, res) => {
+            resolve(res);
+          });
+        });
+
+        const obtainedNames = await names;
+        return String(obtainedNames);
+      };
+
+      const names = await getNames();
+      const authornames = clearNames(names);
+      console.log(authornames);
+
+      // Todo: Experiment of abstract extraction.
+      const divs = [];
+      treeAr = [];
+      getLinearAr(mainContent);
+
+      for (const node of treeAr) {
+        const containsStarterWord = checkStarterWords(node.content);
+        if (node.nodeName === "DIV" && containsStarterWord) {
+          divs.push(node.content);
+        }
+      }
+      console.log(divs);
+
+      // * Get Titles
+      let titles = { H1: [], H2: [], H3: [] };
+      for (let i = 0; i < treeAr.length; i++) {
+        if (
+          treeAr[i].nodeName == "H3" ||
+          treeAr[i].nodeName == "H2" ||
+          treeAr[i].nodeName == "H1"
+        ) {
+          titles[treeAr[i].nodeName].push(treeAr[i].content);
+        }
+      }
+
+      let heading = "";
+      if (titles.H1.length > 0) {
+        heading = titles.H1[0];
+      } else if (titles.H2.length > 0) {
+        heading = titles.H2[0];
+      } else if (titles.H3.length > 0) {
+        heading = titles.H3[0];
+      }
+
+      console.log(heading);
     }
-
-    return "";
-  });
+  }
 
   // console.log(tree);
   // fs.writeFile("test.txt", JSON.stringify(tree), () => {});
-
-  getLinearAr(tree);
-  // console.log(treeAr);
-
-  treeAr.sort((a, b) => {
-    return b.nodeScore - a.nodeScore;
-  });
-
-  // console.log(treeAr);
-  // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
-
-  const treeArlen = treeAr.length;
-
-  const contentDiffAr = [];
-
-  for (let i = 0; i < treeArlen - 1; i++) {
-    const contentDiff = treeAr[i].nodeScore - treeAr[i + 1].nodeScore;
-    contentDiffAr.push(contentDiff);
-  }
-
-  const maxContentDiffIndex = contentDiffAr.reduce(
-    (bestIndexSoFar, currentlyTestedValue, currentlyTestedIndex, array) =>
-      currentlyTestedValue > array[bestIndexSoFar]
-        ? currentlyTestedIndex
-        : bestIndexSoFar,
-    0
-  );
-
-  // * Take one third of the mainContent and write it in a file for inference.
-  const filename = "input-file2.txt";
-  const mainContent = treeAr[maxContentDiffIndex];
-  const subSectionCnt = 2; // Math.floor(mainContent.childrenCount / 3);
-  let subSection = "";
-  for (let i = 0; i < subSectionCnt; i++) {
-    subSection += mainContent.children[i].content + " ";
-  }
-  fs.writeFile(filename, subSection, () => {});
-
-  // * Call the python script and get the results back.
-  const options = {
-    mode: "text",
-    args: [filename],
-  };
-
-  const getNames = async () => {
-    const names = new Promise((resolve, reject) => {
-      PythonShell.run("script.py", options, (err, res) => {
-        resolve(res);
-      });
-    });
-
-    const obtainedNames = await names;
-    return String(obtainedNames);
-  };
-
-  const names = await getNames();
-  const authornames = clearNames(names);
-  console.log(authornames);
-
-  // Todo: Experiment of abstract extraction.
-  const divs = [];
-  treeAr = [];
-  getLinearAr(mainContent);
-
-  for (const node of treeAr) {
-    const containsStarterWord = checkStarterWords(node.content);
-    if (node.nodeName === "DIV" && containsStarterWord) {
-      divs.push(node.content);
-    }
-  }
-
-  console.log(divs);
 
   // * Close the browser.
   await browser.close();
