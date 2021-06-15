@@ -2,3 +2,7 @@ node_modules
 *.json
 *.txt
 test.js
+classifier.js
+content.js
+tree_test.js
+links

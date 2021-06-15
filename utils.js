@@ -1,6 +1,8 @@
 const spawn = require("child_process").spawn;
+const { PythonShell } = require("python-shell");
+const fs = require("fs");
 
-exports.checkStarterWords = (content) => {
+const checkStarterWords = (content) => {
   const starterWords = [
     "abstract",
     "background",
@@ -18,7 +20,7 @@ exports.checkStarterWords = (content) => {
   return false;
 };
 
-exports.clearNames = (names) => {
+const clearNames = (names) => {
   startIndex = names.indexOf("[");
   endIndex = names.indexOf("]");
   const nameSection = names.slice(startIndex + 1, endIndex);
@@ -82,4 +84,87 @@ exports.generateQueryString = (firstname, lastname, site) => {
   }
 
   return queryString;
+};
+
+exports.getMainContent = (treeAr) => {
+  const treeArlen = treeAr.length;
+
+  const contentDiffAr = [];
+
+  for (let i = 0; i < treeArlen - 1; i++) {
+    const contentDiff = treeAr[i].nodeScore - treeAr[i + 1].nodeScore;
+    contentDiffAr.push(contentDiff);
+  }
+
+  const maxContentDiffIndex = contentDiffAr.reduce(
+    (bestIndexSoFar, currentlyTestedValue, currentlyTestedIndex, array) =>
+      currentlyTestedValue > array[bestIndexSoFar]
+        ? currentlyTestedIndex
+        : bestIndexSoFar,
+    0
+  );
+
+  return treeAr[maxContentDiffIndex];
+};
+
+exports.getAuthorNames = async (filename, subSectionCnt, mainContent) => {
+  const options = {
+    mode: "text",
+    args: [filename],
+  };
+
+  let authors = [];
+  for (let i = 0; i < subSectionCnt; i++) {
+    const subSection = mainContent.children[i].content;
+    fs.writeFile(filename, subSection, () => {});
+
+    const names = new Promise((resolve, reject) => {
+      PythonShell.run("script.py", options, (err, res) => {
+        resolve(res);
+      });
+    });
+
+    const obtainedNames = await names;
+    const authornames = clearNames(String(obtainedNames));
+
+    authors = authornames.length > authors.length ? authornames : authors;
+  }
+
+  return authors;
+};
+
+exports.getHeading = (treeAr) => {
+  let titles = { H1: [], H2: [], H3: [] };
+  for (let i = 0; i < treeAr.length; i++) {
+    if (
+      treeAr[i].nodeName == "H3" ||
+      treeAr[i].nodeName == "H2" ||
+      treeAr[i].nodeName == "H1"
+    ) {
+      titles[treeAr[i].nodeName].push(treeAr[i].content);
+    }
+  }
+
+  let heading = "";
+  if (titles.H1.length > 0) {
+    heading = titles.H1[0];
+  } else if (titles.H2.length > 0) {
+    heading = titles.H2[0];
+  } else if (titles.H3.length > 0) {
+    heading = titles.H3[0];
+  }
+
+  return heading;
+};
+
+exports.getDivs = (treeAr) => {
+  const divs = [];
+
+  for (const node of treeAr) {
+    const containsStarterWord = checkStarterWords(node.content);
+    if (node.nodeName === "DIV" && containsStarterWord) {
+      divs.push(node.content);
+    }
+  }
+  return divs;
 };

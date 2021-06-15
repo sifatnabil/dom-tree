@@ -1,15 +1,13 @@
-const spawn = require("child_process").spawn;
 const puppeteer = require("puppeteer");
 const fs = require("fs");
-const { PythonShell } = require("python-shell");
 const {
-  checkStarterWords,
-  clearNames,
-  isArticle,
   generateQueryString,
+  getMainContent,
+  isArticle,
+  getAuthorNames,
+  getHeading,
+  getDivs,
 } = require("./utils");
-
-// const { getLinearAr } = require("./content");
 
 // const url =
 //   "https://trialsjournal.biomedcentral.com/articles/10.1186/s13063-020-04543-4";
@@ -37,7 +35,6 @@ const getLinearAr = (node) => {
       getLinearAr(node.children[j]);
     }
   }
-
   treeAr.push({
     nodeName: node.nodeName,
     parentName: node.parentName,
@@ -174,104 +171,37 @@ const getTree = async () => {
     });
 
     if (tree !== "") {
+      // * Find out the main portion of a page.
       getLinearAr(tree);
-      // console.log(treeAr);
 
       treeAr.sort((a, b) => {
         return b.nodeScore - a.nodeScore;
       });
 
-      // console.log(treeAr);
-      // fs.writeFile("test-trialsjournal.txt", JSON.stringify(treeAr), () => {});
+      const mainContent = getMainContent(treeAr);
 
-      const treeArlen = treeAr.length;
-
-      const contentDiffAr = [];
-
-      for (let i = 0; i < treeArlen - 1; i++) {
-        const contentDiff = treeAr[i].nodeScore - treeAr[i + 1].nodeScore;
-        contentDiffAr.push(contentDiff);
-      }
-
-      const maxContentDiffIndex = contentDiffAr.reduce(
-        (bestIndexSoFar, currentlyTestedValue, currentlyTestedIndex, array) =>
-          currentlyTestedValue > array[bestIndexSoFar]
-            ? currentlyTestedIndex
-            : bestIndexSoFar,
-        0
+      // * Send first three child of mainContent to find out co-authors.
+      const filename = "input-file2.txt";
+      const subSectionCnt = 3;
+      const authors = await getAuthorNames(
+        filename,
+        subSectionCnt,
+        mainContent
       );
 
-      // * Take one third of the mainContent and write it in a file for inference.
-      const filename = "input-file2.txt";
-      const mainContent = treeAr[maxContentDiffIndex];
-      const subSectionCnt = 2; // Math.floor(mainContent.childrenCount / 3);
-      let subSection = "";
-      for (let i = 0; i < subSectionCnt; i++) {
-        subSection += mainContent.children[i].content + " ";
-      }
-      fs.writeFile(filename, subSection, () => {});
+      console.log(authors);
 
-      // * Call the python script and get the results back.
-      const options = {
-        mode: "text",
-        args: [filename],
-      };
-
-      const getNames = async () => {
-        const names = new Promise((resolve, reject) => {
-          PythonShell.run("script.py", options, (err, res) => {
-            resolve(res);
-          });
-        });
-
-        const obtainedNames = await names;
-        return String(obtainedNames);
-      };
-
-      const names = await getNames();
-      const authornames = clearNames(names);
-      console.log(authornames);
-
-      // Todo: Experiment of abstract extraction.
-      const divs = [];
+      // * Abstract Extraction
       treeAr = [];
       getLinearAr(mainContent);
-
-      for (const node of treeAr) {
-        const containsStarterWord = checkStarterWords(node.content);
-        if (node.nodeName === "DIV" && containsStarterWord) {
-          divs.push(node.content);
-        }
-      }
+      const divs = getDivs(treeAr);
       console.log(divs);
 
       // * Get Titles
-      let titles = { H1: [], H2: [], H3: [] };
-      for (let i = 0; i < treeAr.length; i++) {
-        if (
-          treeAr[i].nodeName == "H3" ||
-          treeAr[i].nodeName == "H2" ||
-          treeAr[i].nodeName == "H1"
-        ) {
-          titles[treeAr[i].nodeName].push(treeAr[i].content);
-        }
-      }
-
-      let heading = "";
-      if (titles.H1.length > 0) {
-        heading = titles.H1[0];
-      } else if (titles.H2.length > 0) {
-        heading = titles.H2[0];
-      } else if (titles.H3.length > 0) {
-        heading = titles.H3[0];
-      }
-
+      const heading = getHeading(treeAr);
       console.log(heading);
     }
   }
-
-  // console.log(tree);
-  // fs.writeFile("test.txt", JSON.stringify(tree), () => {});
 
   // * Close the browser.
   await browser.close();
