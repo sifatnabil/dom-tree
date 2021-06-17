@@ -114,20 +114,22 @@ exports.getAuthorNames = async (filename, subSectionCnt, mainContent) => {
   };
 
   let authors = [];
-  for (let i = 0; i < subSectionCnt; i++) {
-    const subSection = mainContent.children[i].content;
-    fs.writeFile(filename, subSection, () => {});
+  if (mainContent.childrenCount > 0) {
+    for (let i = 0; i < subSectionCnt && i < mainContent.childrenCount; i++) {
+      const subSection = mainContent.children[i].content || "";
+      fs.writeFile(filename, subSection, () => {});
 
-    const names = new Promise((resolve, reject) => {
-      PythonShell.run("script.py", options, (err, res) => {
-        resolve(res);
+      const names = new Promise((resolve, reject) => {
+        PythonShell.run("script.py", options, (err, res) => {
+          resolve(res);
+        });
       });
-    });
 
-    const obtainedNames = await names;
-    const authornames = clearNames(String(obtainedNames));
+      const obtainedNames = await names;
+      const authornames = clearNames(String(obtainedNames));
 
-    authors = authornames.length > authors.length ? authornames : authors;
+      authors = authornames.length > authors.length ? authornames : authors;
+    }
   }
 
   return authors;
