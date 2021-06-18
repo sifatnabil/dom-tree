@@ -9,6 +9,8 @@ const checkStarterWords = (content) => {
     "conclusion",
     "methods",
     "results",
+    "introductions",
+    "objective",
   ];
 
   for (const word of starterWords) {
@@ -46,13 +48,12 @@ exports.isArticle = async (text) => {
 
   const percentage = await articleCheck;
 
-  console.log(parseFloat(percentage));
   if (parseFloat(percentage) > 0.5) {
-    console.log("Yes article");
+    console.log(`It's an article with a score of: ${parseFloat(percentage)}`);
     return true;
   }
 
-  console.log("Not article");
+  console.log(`It's not an article with a score of: ${parseFloat(percentage)}`);
   return false;
 };
 
@@ -159,7 +160,7 @@ exports.getHeading = (treeAr) => {
   return heading;
 };
 
-exports.getDivs = (treeAr) => {
+exports.getAbstract = async (treeAr) => {
   const divs = [];
 
   for (const node of treeAr) {
@@ -168,5 +169,30 @@ exports.getDivs = (treeAr) => {
       divs.push(node.content);
     }
   }
-  return divs;
+
+  let abstract = "";
+  let score = -1;
+
+  for (const div of divs) {
+    const options = {
+      mode: "text",
+      args: [div],
+    };
+
+    const isAbstract = new Promise((resolve, reject) => {
+      PythonShell.run("abstract_classifier.py", options, (err, res) => {
+        resolve(res);
+      });
+    });
+
+    const abstractClf = await isAbstract;
+    const classifierLabel = abstractClf[1];
+    const classifierScore = abstractClf[2];
+
+    if (classifierLabel == "positive" && classifierScore > score) {
+      score = classifierScore;
+      abstract = div;
+    }
+  }
+  return abstract;
 };

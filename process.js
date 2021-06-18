@@ -6,7 +6,7 @@ const {
   isArticle,
   getAuthorNames,
   getHeading,
-  getDivs,
+  getAbstract,
 } = require("./utils");
 
 // const url =
@@ -182,7 +182,7 @@ const getTree = async () => {
 
       // * Send first three child of mainContent to find out co-authors.
       const filename = "input-file2.txt";
-      const subSectionCnt = 3;
+      const subSectionCnt = 2;
       const authors = await getAuthorNames(
         filename,
         subSectionCnt,
@@ -194,12 +194,13 @@ const getTree = async () => {
       // * Abstract Extraction
       treeAr = [];
       getLinearAr(mainContent);
-      const divs = getDivs(treeAr);
+      const divs = await getAbstract(treeAr);
+      console.log(`Article Abstract is: `);
       console.log(divs);
 
       // * Get Titles
       const heading = getHeading(treeAr);
-      console.log(heading);
+      console.log(`Title of the Article: ${heading}`);
     }
   }
 
