@@ -51,7 +51,7 @@ const getLinearAr = (node) => {
 
 const getTree = async () => {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     defaultViewport: null,
     ignoreHTTPSErrors: true,
   });

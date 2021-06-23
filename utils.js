@@ -180,16 +180,18 @@ exports.getAbstract = async (treeAr) => {
     };
 
     const isAbstract = new Promise((resolve, reject) => {
-      PythonShell.run("abstract_classifier.py", options, (err, res) => {
+      PythonShell.run("bert_classifier.py", options, (err, res) => {
         resolve(res);
       });
     });
 
     const abstractClf = await isAbstract;
     const classifierLabel = abstractClf[1];
-    const classifierScore = abstractClf[2];
+    const classifierScore = abstractClf[0];
 
-    if (classifierLabel == "positive" && classifierScore > score) {
+    // console.log(abstractClf);
+
+    if (classifierLabel == "abstract" && classifierScore > score) {
       score = classifierScore;
       abstract = div;
     }
