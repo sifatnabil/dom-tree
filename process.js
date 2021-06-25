@@ -7,6 +7,7 @@ const {
   getAuthorNames,
   getHeading,
   getAbstract,
+  getPublicationDate,
 } = require("./utils");
 
 // const url =
@@ -51,7 +52,7 @@ const getLinearAr = (node) => {
 
 const getTree = async () => {
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false,
     defaultViewport: null,
     ignoreHTTPSErrors: true,
   });
@@ -182,7 +183,7 @@ const getTree = async () => {
 
       // * Send first three child of mainContent to find out co-authors.
       const filename = "input-file2.txt";
-      const subSectionCnt = 2;
+      const subSectionCnt = 3;
       const authors = await getAuthorNames(
         filename,
         subSectionCnt,
@@ -190,6 +191,11 @@ const getTree = async () => {
       );
 
       console.log(authors);
+
+      // * Publication Date
+      fs.writeFileSync("input-file3.txt", mainContent.content);
+      const publicationDate = await getPublicationDate("input-file3.txt");
+      console.log(`Publication Date: ${publicationDate}`);
 
       // * Abstract Extraction
       treeAr = [];

@@ -198,3 +198,22 @@ exports.getAbstract = async (treeAr) => {
   }
   return abstract;
 };
+
+exports.getPublicationDate = async (filename) => {
+  const options = {
+    mode: "text",
+    args: [filename],
+  };
+
+  const getDate = new Promise((resolve, reject) => {
+    PythonShell.run("date_finder.py", options, (err, res) => {
+      if (res) {
+        resolve(res[res.length - 1]);
+      }
+      resolve("");
+    });
+  });
+
+  const date = await getDate;
+  return date;
+};
