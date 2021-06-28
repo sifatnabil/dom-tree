@@ -1,4 +1,4 @@
-import lexnlp.extract.all_locales.dates
+import lexnlp.extract.en.dates
 import sys
 
 def find_date(text):
@@ -8,7 +8,6 @@ def find_date(text):
 if __name__ == "__main__":
     filename = sys.argv[1]
     with open(filename, "r", encoding='utf8') as f:
-        text = f.read();
+        text = f.read()
 
-    print(text)
     find_date(text)

@@ -38,8 +38,8 @@ const clearNames = (names) => {
   return "";
 };
 
-exports.isArticle = async (text) => {
-  const pythonProcess = spawn("python", ["./classifier.py", text]);
+exports.isArticle = async (filename) => {
+  const pythonProcess = spawn("python", ["./classifier.py", filename]);
   const articleCheck = new Promise((resolve, reject) => {
     pythonProcess.stdout.on("data", (data) => {
       resolve(data.toString());

@@ -110,7 +110,17 @@ const getTree = async () => {
 
   for (const url of links) {
     treeAr = [];
+    const pageContentFile = "input-file1.txt";
     await page.goto(url.Link, { waitUntil: "networkidle0" });
+
+    const pageContent = await page.evaluate(() => {
+      const text = document.querySelector("body").outerText;
+      return text;
+    });
+
+    fs.writeFileSync(pageContentFile, pageContent);
+    const article = await isArticle(pageContentFile);
+    if (!article) continue;
 
     const tree = await page.evaluate(async () => {
       // * Look for expandable sections and click them.
@@ -159,55 +169,50 @@ const getTree = async () => {
         return false;
       };
       const nodes = document.querySelector("body");
-      const bodyText = document.querySelector("body").outerText;
 
-      const article = await isArticle(bodyText);
-      console.log(article);
-
-      if (article) {
-        return await getNodeTree(nodes);
-      }
-
-      return "";
+      return await getNodeTree(nodes);
     });
 
-    if (tree !== "") {
-      // * Find out the main portion of a page.
-      getLinearAr(tree);
+    // * Find out the main portion of a page.
+    getLinearAr(tree);
 
-      treeAr.sort((a, b) => {
-        return b.nodeScore - a.nodeScore;
-      });
+    treeAr.sort((a, b) => {
+      return b.nodeScore - a.nodeScore;
+    });
 
-      const mainContent = getMainContent(treeAr);
+    const mainContent = getMainContent(treeAr);
 
-      // * Send first three child of mainContent to find out co-authors.
-      const filename = "input-file2.txt";
-      const subSectionCnt = 3;
-      const authors = await getAuthorNames(
-        filename,
-        subSectionCnt,
-        mainContent
-      );
+    // * Send first three child of mainContent to find out co-authors.
+    const filename = "input-file2.txt";
+    const subSectionCnt = 3;
+    const authors = await getAuthorNames(filename, subSectionCnt, mainContent);
 
-      console.log(authors);
+    // console.log(authors);
 
-      // * Publication Date
-      fs.writeFileSync("input-file3.txt", mainContent.content);
-      const publicationDate = await getPublicationDate("input-file3.txt");
-      console.log(`Publication Date: ${publicationDate}`);
+    // * Publication Date
+    fs.writeFileSync("input-file3.txt", mainContent.content);
+    const publicationDate = await getPublicationDate("input-file3.txt");
+    // console.log(`Publication Date: ${publicationDate}`);
 
-      // * Abstract Extraction
-      treeAr = [];
-      getLinearAr(mainContent);
-      const divs = await getAbstract(treeAr);
-      console.log(`Article Abstract is: `);
-      console.log(divs);
+    // * Abstract Extraction
+    treeAr = [];
+    getLinearAr(mainContent);
+    const divs = await getAbstract(treeAr);
+    // console.log(`Article Abstract is: `);
+    // console.log(divs);
 
-      // * Get Titles
-      const heading = getHeading(treeAr);
-      console.log(`Title of the Article: ${heading}`);
-    }
+    // * Get Titles
+    const heading = getHeading(treeAr);
+    // console.log(`Title of the Article: ${heading}`);
+
+    const scraped_data = {
+      "Publication Date": publicationDate,
+      Authors: authors.toString(),
+      Title: heading,
+      Abstract: divs,
+    };
+
+    console.log(scraped_data);
   }
 
   // * Close the browser.

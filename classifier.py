@@ -30,9 +30,14 @@ def main(argv):
    export_model.compile(
      loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy'])
 
-   results = export_model.predict([argv[0]])
+   # results = export_model.predict([argv[0]])
+   results = export_model.predict([argv])
    print(results[0][0])
    sys.stdout.flush()
 
 if __name__ == "__main__":
-   main(sys.argv[1:])
+   filename = sys.argv[1]
+   with open(filename, "r", encoding='utf8') as f:
+      text = f.read()
+
+   main(text)
