@@ -47,6 +47,9 @@ const getLinearAr = (node) => {
     nodeFont: node.nodeFont,
     nodeFontSize: node.nodeFontSize,
     nodeStyle: node.nodeStyle,
+    classList: node.classList,
+    className: node.className,
+    href: node.href ? node.href : "",
   });
 };
 
@@ -71,68 +74,8 @@ const getTree = async () => {
     await page.goto(queryString, { waitUntil: "networkidle0" });
     await page.waitForTimeout(5000);
 
-    const aTags = await page.evaluate(
-      (name, home) => {
-        const tags = document.querySelectorAll("body a");
-        const links = [];
-        const linksWithText = [];
-        tags.forEach((tag) => {
-          const text = tag.outerText.trim();
-          const link = tag.href;
-
-          if (
-            text.split(" ").length >= 4 &&
-            link.includes(home) &&
-            !links.includes(link)
-          ) {
-            linksWithText.push({
-              Link: link,
-              Text: text,
-              Site: name,
-            });
-            links.push(link);
-          }
-        });
-        return linksWithText;
-      },
-      sitename,
-      url
-    );
-
-    allLinks.push(...aTags);
-  }
-
-  fs.writeFileSync("links", JSON.stringify(allLinks));
-
-  console.log("Link grabbing complete");
-
-  const links = JSON.parse(fs.readFileSync("links", "utf8"));
-
-  for (const url of links) {
-    treeAr = [];
-    const pageContentFile = "input-file1.txt";
-    await page.goto(url.Link, { waitUntil: "networkidle0" });
-
-    const pageContent = await page.evaluate(() => {
-      const text = document.querySelector("body").outerText;
-      return text;
-    });
-
-    fs.writeFileSync(pageContentFile, pageContent);
-    const article = await isArticle(pageContentFile);
-    if (!article) continue;
-
-    const tree = await page.evaluate(async () => {
-      // * Look for expandable sections and click them.
-      const aTags = document.querySelectorAll("a");
-      aTags.forEach((tag) => {
-        if (tag.outerText == "[…]") {
-          tag.click();
-        }
-      });
-
+    const getLinks = await page.evaluate(() => {
       let nodeValue = 0;
-
       const getNodeTree = (node) => {
         if (node.hasChildNodes()) {
           let children = [];
@@ -163,60 +106,173 @@ const getTree = async () => {
             nodeFont: node.style.fontFamily,
             nodeFontSize: node.style.fontSize,
             nodeStyle: node.style,
+            classList: node.classList,
+            className: node.className,
+            href: node.href ? node.href : "",
           };
         }
 
         return false;
       };
-      const nodes = document.querySelector("body");
 
-      return await getNodeTree(nodes);
+      const body = document.querySelector("body");
+      const tree = getNodeTree(body);
+
+      return tree;
     });
-
-    // * Find out the main portion of a page.
-    getLinearAr(tree);
-
-    treeAr.sort((a, b) => {
-      return b.nodeScore - a.nodeScore;
-    });
-
-    const mainContent = getMainContent(treeAr);
-
-    // * Send first three child of mainContent to find out co-authors.
-    const filename = "input-file2.txt";
-    const subSectionCnt = 3;
-    const authors = await getAuthorNames(filename, subSectionCnt, mainContent);
-
-    // console.log(authors);
-
-    // * Publication Date
-    fs.writeFileSync("input-file3.txt", mainContent.content);
-    const publicationDate = await getPublicationDate("input-file3.txt");
-    // console.log(`Publication Date: ${publicationDate}`);
-
-    // * Abstract Extraction
     treeAr = [];
-    getLinearAr(mainContent);
-    const divs = await getAbstract(treeAr);
-    // console.log(`Article Abstract is: `);
-    // console.log(divs);
+    getLinearAr(getLinks);
 
-    // * Get Titles
-    const heading = getHeading(treeAr);
-    // console.log(`Title of the Article: ${heading}`);
+    const classNames = [
+      "usa-input-error-message",
+      "full-docsum",
+      "item-selector-wrap",
+      "selectors-and-actions",
+      "search-result-selector",
+      "search-result-position",
+      "position-number",
+      "side-bar",
+      "docsum-wrap",
+      "docsum-content",
+      "docsum-title",
+      "docsum-citation",
+      "full-citation",
+      "full-authors",
+      "short-authors",
+      "full-journal-citation",
+      "short-journal-citation",
+      "docsum-pmid",
+      "docsum-snippet",
+      "full-view-snippet",
+      "short-view-snippet",
+      "bottom-bar",
+      "in-clipboard-label",
+    ];
 
-    const scraped_data = {
-      "Publication Date": publicationDate,
-      Authors: authors.toString(),
-      Title: heading,
-      Abstract: divs,
-    };
+    for (let i = 0; i < treeAr.length; i++) {
+      if (
+        treeAr[i].nodeName == "A" &&
+        classNames.includes(treeAr[i].className)
+      ) {
+        allLinks.push(treeAr[i].href);
+      }
+    }
 
-    console.log(scraped_data);
+    fs.writeFileSync("links", JSON.stringify(allLinks));
+
+    console.log("Link grabbing complete");
+
+    const links = JSON.parse(fs.readFileSync("links", "utf8"));
+
+    for (const url of links) {
+      treeAr = [];
+      await page.goto(url, { waitUntil: "networkidle0" });
+
+      const pageContent = await page.evaluate(() => {
+        const text = document.querySelector("body").outerText;
+        return text;
+      });
+
+      const tree = await page.evaluate(async () => {
+        // * Look for expandable sections and click them.
+        const aTags = document.querySelectorAll("a");
+        aTags.forEach((tag) => {
+          if (tag.outerText == "[…]") {
+            tag.click();
+          }
+        });
+
+        let nodeValue = 0;
+
+        const getNodeTree = (node) => {
+          if (node.hasChildNodes()) {
+            let children = [];
+            for (let j = 0; j < node.childNodes.length; j++) {
+              const child = getNodeTree(node.childNodes[j]);
+              if (child) children.push(child);
+            }
+
+            nodeValue++;
+            let score = 0;
+            let content = node.outerText || "";
+            if (content) {
+              const contentWords = content.split(" ");
+              for (const word of contentWords) {
+                if (word.trim()) {
+                  score++;
+                }
+              }
+            }
+
+            return {
+              nodeName: node.nodeName,
+              parentName: node.parentNode.nodeName,
+              children: children,
+              content: node.innerText || "",
+              nodeVal: nodeValue,
+              nodeScore: score,
+              nodeFont: node.style.fontFamily,
+              nodeFontSize: node.style.fontSize,
+              nodeStyle: node.style,
+            };
+          }
+
+          return false;
+        };
+        const nodes = document.querySelector("body");
+
+        return await getNodeTree(nodes);
+      });
+
+      // * Find out the main portion of a page.
+      getLinearAr(tree);
+
+      treeAr.sort((a, b) => {
+        return b.nodeScore - a.nodeScore;
+      });
+
+      const mainContent = getMainContent(treeAr);
+
+      // * Send first three child of mainContent to find out co-authors.
+      const filename = "input-file2.txt";
+      const subSectionCnt = 3;
+      const authors = await getAuthorNames(
+        filename,
+        subSectionCnt,
+        mainContent
+      );
+
+      // console.log(authors);
+
+      // * Publication Date
+      fs.writeFileSync("input-file3.txt", mainContent.content);
+      const publicationDate = await getPublicationDate("input-file3.txt");
+      // console.log(`Publication Date: ${publicationDate}`);
+
+      // * Abstract Extraction
+      treeAr = [];
+      getLinearAr(mainContent);
+      const divs = await getAbstract(treeAr);
+      // console.log(`Article Abstract is: `);
+      // console.log(divs);
+
+      // * Get Titles
+      const heading = getHeading(treeAr);
+      // console.log(`Title of the Article: ${heading}`);
+
+      const scraped_data = {
+        "Publication Date": publicationDate,
+        Authors: authors.toString(),
+        Title: heading,
+        Abstract: divs,
+      };
+
+      console.log(scraped_data);
+    }
+
+    // * Close the browser.
+    await browser.close();
   }
-
-  // * Close the browser.
-  await browser.close();
 };
 
 getTree();
